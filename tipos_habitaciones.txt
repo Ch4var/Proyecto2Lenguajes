@@ -1,0 +1,2 @@
+Estandar,una habitación con cama queen y aire acondicionado,3
+Deluxe,una habitación con cama king y jacuzzi,2
