@@ -232,8 +232,41 @@ mostrarReservacion (idReservacion, nombre, fechaHoraReservacion, fechaIngreso, f
     putStrLn $ "ID Habitacion: " ++ show idHabitacion
     putStrLn $ "Tipo Habitacion: " ++ tipoHabitacion
 
-menu_principal :: [TipoHabitacion] -> [Habitacion] -> [Tarifa] -> [Reservacion] -> IO ()
-menu_principal tiposHabitaciones habitaciones tarifas reservaciones = do
+facturarReservacion :: [Reservacion] -> [Reservacion] -> IO [Reservacion]
+facturarReservacion reservaciones reservacionesFacturadas = do
+    mostrarReservaciones reservaciones
+    putStrLn "Ingrese el índice de la reservación que desea facturar:"
+    indiceStr <- getLine
+    let indice = read indiceStr :: Int
+    if indice < 1 || indice > length reservaciones
+        then do
+            putStrLn "Índice fuera de rango. Intente de nuevo."
+            facturarReservacion reservaciones reservacionesFacturadas
+        else do
+            let reservacion = reservaciones !! (indice - 1)
+            if elem reservacion reservacionesFacturadas
+                then do
+                    putStrLn "La reservación ya está facturada."
+                    return reservacionesFacturadas
+                else do
+                    putStrLn "La reservación ha sido facturada."
+                    return (reservacion : reservacionesFacturadas)
+
+estadisticas :: [Reservacion] -> [Habitacion] -> IO ()
+estadisticas reservacionesFacturadas habitaciones = do
+    let totalHuespedes = sum $ map (\(_, _, _, _, _, cantAdultos, cantNinos, _, _, _) -> cantAdultos + cantNinos) reservacionesFacturadas
+    let habitacionesOcupadas = nub $ map (\(_, _, _, _, _, _, _, _, idHabitacion, _) -> idHabitacion) reservacionesFacturadas
+    let totalHabitacionesNoOcupadas = length habitaciones - length habitacionesOcupadas
+    let montoRecaudado = sum $ map (\(_, _, _, _, _, _, _, total, _, _) -> total) reservacionesFacturadas
+    let montoRecaudadoConImpuestos = fromIntegral montoRecaudado * 1.13
+
+    putStrLn $ "Total de huespedes: " ++ show totalHuespedes
+    putStrLn $ "Listado de habitaciones ocupadas: " ++ show habitacionesOcupadas
+    putStrLn $ "Total de habitaciones no ocupadas: " ++ show totalHabitacionesNoOcupadas
+    putStrLn $ "Monto recaudado con impuestos: $" ++ show montoRecaudadoConImpuestos
+
+menu_principal :: [TipoHabitacion] -> [Habitacion] -> [Tarifa] -> [Reservacion] -> [Reservacion] -> IO ()
+menu_principal tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas = do
     putStrLn "Bienvenido al menú principal"
     putStrLn "1. Opciones Administrativas"
     putStrLn "2. Opciones Generales"
@@ -241,15 +274,15 @@ menu_principal tiposHabitaciones habitaciones tarifas reservaciones = do
     putStr "Elija una opcion: \n"
     choice <- getLine
     case choice of
-        "1" -> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
-        "2" -> opciones_generales tiposHabitaciones habitaciones tarifas reservaciones
+        "1" -> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
+        "2" -> opciones_generales tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         "3" -> return ()
         _   -> do
           putStrLn "Opcion invalida"
-          menu_principal tiposHabitaciones habitaciones tarifas reservaciones
+          menu_principal tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
 
-opciones_generales :: [TipoHabitacion] -> [Habitacion] -> [Tarifa] -> [Reservacion] -> IO ()
-opciones_generales tiposHabitaciones habitaciones tarifas reservaciones = do
+opciones_generales :: [TipoHabitacion] -> [Habitacion] -> [Tarifa] -> [Reservacion] -> [Reservacion] ->  IO ()
+opciones_generales tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas = do
     putStrLn "Bienvenido al menú de Opciones Generales"
     putStrLn "1. Reservacion"
     putStrLn "2. Facturar Reservacion"
@@ -259,16 +292,18 @@ opciones_generales tiposHabitaciones habitaciones tarifas reservaciones = do
     case opcion of
         "1" -> do
             nuevasReservaciones <- hacerReservacion tiposHabitaciones habitaciones reservaciones tarifas
-            opciones_generales tiposHabitaciones habitaciones tarifas nuevasReservaciones
-        --"2" -> Facturar Reservacion
+            opciones_generales tiposHabitaciones habitaciones tarifas nuevasReservaciones reservacionesFacturadas
+        "2" -> do
+            nuevasReservacionesFacturadas <- facturarReservacion reservaciones reservacionesFacturadas
+            opciones_generales tiposHabitaciones habitaciones tarifas reservaciones nuevasReservacionesFacturadas
         "3" -> do
-            menu_principal tiposHabitaciones habitaciones tarifas reservaciones
+            menu_principal tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         _   -> do
             putStrLn "Opcion invalida"
-            opciones_generales tiposHabitaciones habitaciones tarifas reservaciones
+            opciones_generales tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
 
-opciones_administrativas :: [TipoHabitacion] -> [Habitacion] -> [Tarifa] -> [Reservacion] -> IO ()
-opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones = do
+opciones_administrativas :: [TipoHabitacion] -> [Habitacion] -> [Tarifa] -> [Reservacion] -> [Reservacion] -> IO ()
+opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas = do
     putStrLn "Bienvenido al menú de Opciones Administrativas"
     putStrLn "1. Informacion de hotel"
     putStrLn "2. Mostrar tipos de habitaciones"
@@ -280,28 +315,28 @@ opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones = 
     putStr "Elija una opcion: \n"
     opcion <- getLine
     case opcion of
-        "1" -> informacion_hotel >> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
+        "1" -> informacion_hotel >> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         "2" -> do
             mostrarTiposHabitaciones tiposHabitaciones
-            opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
+            opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         "3" -> do
             if null habitaciones
                 then do
                     nuevasHabitaciones <- asignar_cantidad_habitaciones tiposHabitaciones
-                    opciones_administrativas tiposHabitaciones nuevasHabitaciones tarifas reservaciones
+                    opciones_administrativas tiposHabitaciones nuevasHabitaciones tarifas reservaciones reservacionesFacturadas
                 else do
                     putStrLn "Las habitaciones ya han sido generadas."
-                    opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
+                    opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         "4" -> do
             nuevasTarifas <- carga_tarifas "tarifas.txt"
-            opciones_administrativas tiposHabitaciones habitaciones nuevasTarifas reservaciones
-        "5" -> mostrarReservaciones reservaciones >> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
-        --"6" -> estadisticas_ocupacion >> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
+            opciones_administrativas tiposHabitaciones habitaciones nuevasTarifas reservaciones reservacionesFacturadas
+        "5" -> mostrarReservaciones reservaciones >> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
+        "6" -> estadisticas reservacionesFacturadas habitaciones >> opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         "7" -> do
-            menu_principal tiposHabitaciones habitaciones tarifas reservaciones
+            menu_principal tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
         _   -> do
             putStrLn "Opcion invalida"
-            opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones
+            opciones_administrativas tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
 
 main :: IO ()
 main = do
@@ -309,5 +344,5 @@ main = do
     let habitaciones = []
     let tarifas = []
     let reservaciones = []
-    menu_principal tiposHabitaciones habitaciones tarifas reservaciones
-    
+    let reservacionesFacturadas = []
+    menu_principal tiposHabitaciones habitaciones tarifas reservaciones reservacionesFacturadas
